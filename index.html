@@ -187,6 +187,53 @@
   }
   .delete-btn:active { background: rgba(239,68,68,0.2); transform: scale(0.9); }
 
+  .comment-btn {
+    width: 26px; height: 26px; border-radius: 6px;
+    border: 1px solid var(--border); background: transparent;
+    color: var(--text-muted); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex-shrink: 0; transition: all 0.15s;
+  }
+  .comment-btn.has-comment {
+    border-color: rgba(245,158,11,0.5); background: rgba(245,158,11,0.1);
+    color: var(--yellow);
+  }
+  .comment-btn:active { transform: scale(0.9); }
+
+  /* Comment sheet */
+  .comment-sheet {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--surface); border-top: 2px solid var(--accent);
+    border-radius: 16px 16px 0 0; padding: 16px 16px 36px;
+    z-index: 250;
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+    box-shadow: 0 -8px 40px rgba(0,0,0,0.5);
+  }
+  .comment-sheet.open { transform: translateY(0); }
+  .comment-sheet-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 14px; }
+  .comment-sheet-title { font-size: 14px; font-weight: 800; color: var(--text-dim); margin-bottom: 12px; }
+  .comment-sheet-name { font-size: 17px; font-weight: 800; color: var(--text); margin-bottom: 14px; }
+  .comment-textarea {
+    width: 100%; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 12px; color: var(--text);
+    font-family: 'Heebo', sans-serif; font-size: 15px;
+    outline: none; resize: none; height: 90px;
+    transition: border-color 0.15s; text-align: right;
+    margin-bottom: 12px; display: block;
+  }
+  .comment-textarea:focus { border-color: var(--accent); }
+  .comment-textarea::placeholder { color: var(--text-muted); }
+  .comment-actions { display: flex; gap: 10px; }
+  .btn-save {
+    flex: 1; padding: 13px; border-radius: var(--radius-sm); border: none;
+    font-family: 'Heebo', sans-serif; font-size: 15px; font-weight: 700;
+    cursor: pointer; background: var(--accent); color: white; transition: all 0.15s;
+  }
+  .btn-save:active { background: #2563eb; transform: scale(0.97); }
+  .btn-save:disabled { opacity: 0.5; pointer-events: none; }
+
   .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
   .empty-state .icon { font-size: 44px; margin-bottom: 12px; }
   .empty-state .msg { font-size: 17px; font-weight: 700; margin-bottom: 6px; color: var(--text-dim); }
@@ -344,6 +391,17 @@
   <div class="admin-note">לאחר הוספה, לחץ על 🗑 ליד שם הצוער כדי למחוק</div>
 </div>
 
+<div class="comment-sheet" id="commentSheet">
+  <div class="comment-sheet-handle"></div>
+  <div class="comment-sheet-title">💬 הערה לצוער</div>
+  <div class="comment-sheet-name" id="commentCadetName"></div>
+  <textarea class="comment-textarea" id="commentText" placeholder="הכנס הערה..."></textarea>
+  <div class="comment-actions">
+    <button class="btn-cancel" onclick="closeCommentSheet()">ביטול</button>
+    <button class="btn-save" id="saveCommentBtn" onclick="saveComment()">שמור</button>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modalOverlay" onclick="closeModal()">
   <div class="modal-sheet" onclick="event.stopPropagation()">
     <div class="modal-handle"></div>
@@ -410,7 +468,18 @@
           render();
         }
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'cadets' }, function() {
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'cadets' }, function(payload) {
+        var updated = payload.new;
+        if (updated) {
+          var idx = cadets.findIndex(function(c) { return c.id === updated.id; });
+          if (idx !== -1) { cadets[idx] = updated; render(); }
+          else { loadData(); }
+        }
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cadets' }, function() {
+        loadData();
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'cadets' }, function() {
         loadData();
       })
       .subscribe(function(status) {
@@ -473,7 +542,9 @@
         return '<div class="check-cell"><button class="checkpoint-btn ' + (on ? 'c'+s : '') + '" id="cp-' + c.id + '-' + s + '" onclick="handleCheckpoint(' + c.id + ',' + s + ',' + on + ')">' + (on ? '✓' : '') + '</button></div>';
       }).join('');
       var delBtn = adminOpen ? '<button class="delete-btn" onclick="confirmDelete(' + c.id + ',\'' + esc(c.full_name) + '\')">🗑</button>' : '';
-      return '<div class="cadet-row ' + (allDone ? 'all-done' : '') + '"><div class="cadet-num">' + c.number + '</div><div class="cadet-name">' + delBtn + '<span>' + esc(c.full_name) + '</span></div>' + boxes + '</div>';
+      var hasComment = c.comment && c.comment.trim().length > 0;
+      var commentBtn = '<button class="comment-btn ' + (hasComment ? 'has-comment' : '') + '" onclick="openCommentSheet(' + c.id + ')" title="' + (hasComment ? esc(c.comment) : 'הוסף הערה') + '">💬</button>';
+      return '<div class="cadet-row ' + (allDone ? 'all-done' : '') + '"><div class="cadet-num">' + c.number + '</div><div class="cadet-name">' + delBtn + commentBtn + '<span>' + esc(c.full_name) + '</span></div>' + boxes + '</div>';
     }).join('');
   }
 
@@ -589,6 +660,45 @@
   }
 
   function setLive(on) { document.getElementById('liveDot').classList.toggle('offline', !on); }
+
+  var currentCommentCadetId = null;
+
+  function openCommentSheet(cadetId) {
+    var c = cadets.find(function(x) { return x.id === cadetId; });
+    if (!c) return;
+    currentCommentCadetId = cadetId;
+    document.getElementById('commentCadetName').textContent = c.full_name;
+    document.getElementById('commentText').value = c.comment || '';
+    document.getElementById('commentSheet').classList.add('open');
+    setTimeout(function() { document.getElementById('commentText').focus(); }, 350);
+  }
+
+  function closeCommentSheet() {
+    document.getElementById('commentSheet').classList.remove('open');
+    currentCommentCadetId = null;
+  }
+
+  async function saveComment() {
+    if (!currentCommentCadetId) return;
+    var text = document.getElementById('commentText').value.trim();
+    var btn = document.getElementById('saveCommentBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin" style="font-size:13px">↻</span>';
+    try {
+      var res = await db.from('cadets').update({ comment: text }).eq('id', currentCommentCadetId);
+      if (res.error) throw res.error;
+      var c = cadets.find(function(x) { return x.id === currentCommentCadetId; });
+      if (c) c.comment = text;
+      closeCommentSheet();
+      showToast('הערה נשמרה ✓', 'success');
+      render();
+    } catch(e) {
+      showToast('שגיאה בשמירה', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = 'שמור';
+    }
+  }
 
   init();
 </script>
