@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>עזר טילוף</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap');
+
+  :root {
+    --bg: #0a0f1e;
+    --surface: #111827;
+    --surface2: #1a2336;
+    --border: #243048;
+    --accent: #3b82f6;
+    --green: #22c55e;
+    --red: #ef4444;
+    --yellow: #f59e0b;
+    --text: #f1f5f9;
+    --text-muted: #64748b;
+    --text-dim: #94a3b8;
+    --station1: #6366f1;
+    --station2: #3b82f6;
+    --station3: #06b6d4;
+    --station4: #22c55e;
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: 'Heebo', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(10,15,30,0.97);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px 10px;
+  }
+
+  .header-top {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  .title-block { display: flex; align-items: center; gap: 10px; }
+
+  .live-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--green); box-shadow: 0 0 8px var(--green);
+    animation: pulse-dot 2s infinite; flex-shrink: 0;
+  }
+  .live-dot.offline { background: var(--red); box-shadow: 0 0 8px var(--red); animation: none; }
+  @keyframes pulse-dot {
+    0%,100% { opacity:1; transform:scale(1); }
+    50% { opacity:0.5; transform:scale(0.8); }
+  }
+
+  .app-title { font-size: 18px; font-weight: 800; letter-spacing: -0.5px; }
+
+  .header-actions { display: flex; gap: 8px; }
+
+  .btn-icon {
+    min-width: 44px; height: 44px; padding: 0 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-dim);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 15px; font-weight: 700;
+    font-family: 'Heebo', sans-serif;
+    transition: all 0.15s; user-select: none; gap: 5px;
+  }
+  .btn-icon:active { transform: scale(0.93); background: var(--surface2); }
+  .btn-icon.admin-active { border-color: var(--yellow); color: var(--yellow); background: rgba(245,158,11,0.12); }
+
+  .summary {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+  }
+
+  .summary-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 7px 4px 6px;
+    text-align: center; cursor: pointer; transition: all 0.15s;
+    position: relative; overflow: hidden;
+  }
+  .summary-card::before {
+    content:''; position: absolute; top:0; left:0; right:0; height:2px;
+  }
+  .summary-card:nth-child(1)::before { background: var(--station1); }
+  .summary-card:nth-child(2)::before { background: var(--station2); }
+  .summary-card:nth-child(3)::before { background: var(--station3); }
+  .summary-card:nth-child(4)::before { background: var(--station4); }
+  .summary-card.active { border-color: var(--accent); background: rgba(59,130,246,0.1); }
+  .summary-card:active { transform: scale(0.97); }
+
+  .summary-count { font-size: 22px; font-weight: 900; line-height: 1; margin-bottom: 2px; }
+  .summary-card:nth-child(1) .summary-count { color: var(--station1); }
+  .summary-card:nth-child(2) .summary-count { color: var(--station2); }
+  .summary-card:nth-child(3) .summary-count { color: var(--station3); }
+  .summary-card:nth-child(4) .summary-count { color: var(--station4); }
+  .summary-label { font-size: 9px; color: var(--text-muted); font-weight: 500; }
+
+  .filter-bar {
+    padding: 8px 16px; display: flex; align-items: center; gap: 8px;
+    border-bottom: 1px solid var(--border); background: rgba(59,130,246,0.05);
+  }
+  .filter-label { font-size: 12px; color: var(--text-dim); font-weight: 600; }
+  .filter-clear { margin-right: auto; font-size: 13px; color: var(--accent); cursor: pointer; font-weight: 700; padding: 4px 8px; }
+  .cadet-count { font-size: 11px; color: var(--text-muted); }
+
+  .table-container { padding: 12px 16px 130px; }
+
+  .table-header {
+    display: grid; grid-template-columns: 30px 1fr 52px 52px 52px 52px;
+    gap: 4px; padding: 0 4px 8px;
+    border-bottom: 1px solid var(--border); margin-bottom: 8px;
+    align-items: end;
+  }
+  .th { font-size: 9px; font-weight: 700; color: var(--text-muted); text-align: center; }
+  .th.name-col { text-align: right; padding-bottom: 4px; }
+  .station-th {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding-bottom: 2px;
+  }
+  .station-th-label {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    font-size: 10px; font-weight: 700;
+    white-space: nowrap;
+    line-height: 1;
+    padding: 2px 0;
+  }
+  .station-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .sd1 { background: var(--station1); }
+  .sd2 { background: var(--station2); }
+  .sd3 { background: var(--station3); }
+  .sd4 { background: var(--station4); }
+  .th:nth-child(3) .station-th-label { color: var(--station1); }
+  .th:nth-child(4) .station-th-label { color: var(--station2); }
+  .th:nth-child(5) .station-th-label { color: var(--station3); }
+  .th:nth-child(6) .station-th-label { color: var(--station4); }
+
+  .cadet-row {
+    display: grid; grid-template-columns: 30px 1fr 52px 52px 52px 52px;
+    gap: 4px; align-items: center; padding: 7px 4px;
+    border-radius: var(--radius-sm); margin-bottom: 5px;
+    background: var(--surface); border: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+  .cadet-row.all-done { background: rgba(34,197,94,0.05); border-color: rgba(34,197,94,0.2); }
+
+  .cadet-num { font-size: 12px; font-weight: 700; color: var(--text-muted); text-align: center; }
+  .cadet-name { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 5px; overflow: hidden; }
+  .cadet-name span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .check-cell { display: flex; align-items: center; justify-content: center; }
+
+  .checkpoint-btn {
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 2px solid var(--border); background: transparent;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 700; color: transparent; transition: all 0.15s;
+  }
+  .checkpoint-btn:active { transform: scale(0.85); }
+  .checkpoint-btn.c1 { background: rgba(99,102,241,0.2); border-color: var(--station1); color: var(--station1); }
+  .checkpoint-btn.c2 { background: rgba(59,130,246,0.2); border-color: var(--station2); color: var(--station2); }
+  .checkpoint-btn.c3 { background: rgba(6,182,212,0.2); border-color: var(--station3); color: var(--station3); }
+  .checkpoint-btn.c4 { background: rgba(34,197,94,0.2); border-color: var(--station4); color: var(--station4); }
+  .checkpoint-btn.loading { opacity: 0.4; pointer-events: none; }
+
+  .delete-btn {
+    width: 26px; height: 26px; border-radius: 6px;
+    border: 1px solid rgba(239,68,68,0.3); background: rgba(239,68,68,0.08);
+    color: var(--red); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; flex-shrink: 0;
+  }
+  .delete-btn:active { background: rgba(239,68,68,0.2); transform: scale(0.9); }
+
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+  .empty-state .icon { font-size: 44px; margin-bottom: 12px; }
+  .empty-state .msg { font-size: 17px; font-weight: 700; margin-bottom: 6px; color: var(--text-dim); }
+  .empty-state .sub { font-size: 13px; line-height: 1.7; }
+
+  .admin-panel {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--surface); border-top: 2px solid var(--yellow);
+    border-radius: 16px 16px 0 0; padding: 16px 16px 36px;
+    z-index: 200;
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+    box-shadow: 0 -8px 40px rgba(0,0,0,0.5);
+  }
+  .admin-panel.open { transform: translateY(0); }
+
+  .admin-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 14px; }
+  .admin-title { font-size: 15px; font-weight: 800; margin-bottom: 14px; color: var(--yellow); }
+
+  .input-row { display: flex; gap: 8px; margin-bottom: 10px; }
+
+  .field {
+    flex: 1; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 12px;
+    color: var(--text); font-family: 'Heebo', sans-serif; font-size: 15px;
+    outline: none; transition: border-color 0.15s; text-align: right;
+    -webkit-appearance: none;
+  }
+  .field:focus { border-color: var(--accent); }
+  .field::placeholder { color: var(--text-muted); }
+  .field.num-field { width: 70px; flex: none; text-align: center; }
+
+  .btn-add {
+    width: 48px; height: 48px; background: var(--accent);
+    border: none; border-radius: var(--radius-sm); color: white;
+    font-size: 26px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; font-family: 'Heebo', sans-serif;
+    transition: all 0.15s;
+  }
+  .btn-add:active { background: #2563eb; transform: scale(0.93); }
+  .btn-add:disabled { opacity: 0.5; pointer-events: none; }
+
+  .admin-note { font-size: 11px; color: var(--text-muted); line-height: 1.5; }
+
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+    z-index: 300; display: flex; align-items: flex-end;
+    opacity: 0; pointer-events: none; transition: opacity 0.2s;
+  }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+
+  .modal-sheet {
+    background: var(--surface); border-radius: 16px 16px 0 0;
+    padding: 20px 20px 40px; width: 100%;
+    border-top: 1px solid var(--border);
+    transform: translateY(100%);
+    transition: transform 0.25s cubic-bezier(0.4,0,0.2,1);
+  }
+  .modal-overlay.open .modal-sheet { transform: translateY(0); }
+
+  .modal-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 16px; }
+  .modal-icon { font-size: 36px; text-align: center; margin-bottom: 10px; }
+  .modal-title { font-size: 18px; font-weight: 800; text-align: center; margin-bottom: 8px; }
+  .modal-sub { font-size: 14px; color: var(--text-muted); text-align: center; margin-bottom: 22px; line-height: 1.6; white-space: pre-line; }
+  .modal-actions { display: flex; gap: 10px; }
+
+  .btn-cancel, .btn-confirm {
+    flex: 1; padding: 14px; border-radius: var(--radius-sm); border: none;
+    font-family: 'Heebo', sans-serif; font-size: 16px; font-weight: 700;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .btn-cancel { background: var(--surface2); color: var(--text-dim); border: 1px solid var(--border); }
+  .btn-cancel:active { transform: scale(0.97); }
+  .btn-confirm { background: var(--red); color: white; }
+  .btn-confirm:active { transform: scale(0.97); background: #dc2626; }
+
+  .toast {
+    position: fixed; bottom: 28px; left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 24px; padding: 11px 22px;
+    font-size: 14px; font-weight: 600; color: var(--text);
+    z-index: 500; white-space: nowrap;
+    transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4); pointer-events: none;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.success { border-color: var(--green); color: var(--green); }
+  .toast.error { border-color: var(--red); color: var(--red); }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spin { animation: spin 0.6s linear infinite; display: inline-block; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <div class="title-block">
+      <div class="live-dot" id="liveDot"></div>
+      <div class="app-title">⚓ עזר טילוף</div>
+    </div>
+    <div class="header-actions">
+      <button class="btn-icon" id="refreshBtn" onclick="doRefresh()">↻</button>
+      <button class="btn-icon" id="adminBtn" onclick="toggleAdmin()">⚙ ניהול</button>
+    </div>
+  </div>
+  <div class="summary">
+    <div class="summary-card" id="sc1" onclick="toggleFilter(1)">
+      <div class="summary-count" id="s1count">—</div>
+      <div class="summary-label">יצא לים</div>
+    </div>
+    <div class="summary-card" id="sc2" onclick="toggleFilter(2)">
+      <div class="summary-count" id="s2count">—</div>
+      <div class="summary-label">מצוף צפוני</div>
+    </div>
+    <div class="summary-card" id="sc3" onclick="toggleFilter(3)">
+      <div class="summary-count" id="s3count">—</div>
+      <div class="summary-label">מצוף דרומי</div>
+    </div>
+    <div class="summary-card" id="sc4" onclick="toggleFilter(4)">
+      <div class="summary-count" id="s4count">—</div>
+      <div class="summary-label">חזר מהים</div>
+    </div>
+  </div>
+</div>
+
+<div class="filter-bar" id="filterBar" style="display:none">
+  <span class="filter-label" id="filterLabel"></span>
+  <span class="filter-clear" onclick="clearFilter()">✕ נקה סינון</span>
+  <span class="cadet-count" id="filterCount"></span>
+</div>
+
+<div class="table-container">
+  <div class="table-header">
+    <div class="th">#</div>
+    <div class="th name-col">שם</div>
+    <div class="th"><div class="station-th"><div class="station-dot sd1"></div><span class="station-th-label">יצא לים</span></div></div>
+    <div class="th"><div class="station-th"><div class="station-dot sd2"></div><span class="station-th-label">מצוף צפוני</span></div></div>
+    <div class="th"><div class="station-th"><div class="station-dot sd3"></div><span class="station-th-label">מצוף דרומי</span></div></div>
+    <div class="th"><div class="station-th"><div class="station-dot sd4"></div><span class="station-th-label">חזר מהים</span></div></div>
+  </div>
+  <div id="cadetList"></div>
+</div>
+
+<div class="admin-panel" id="adminPanel">
+  <div class="admin-handle"></div>
+  <div class="admin-title">⚙ הוספת צוער</div>
+  <div class="input-row">
+    <input type="number" class="field num-field" id="newNum" placeholder="מס׳" min="1" max="50" inputmode="numeric">
+    <input type="text" class="field" id="newName" placeholder="שם מלא" onkeydown="if(event.key==='Enter')addCadet()">
+    <button class="btn-add" id="addBtn" onclick="addCadet()">+</button>
+  </div>
+  <div class="admin-note">לאחר הוספה, לחץ על 🗑 ליד שם הצוער כדי למחוק</div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal()">
+  <div class="modal-sheet" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-icon" id="modalIcon"></div>
+    <div class="modal-title" id="modalTitle"></div>
+    <div class="modal-sub" id="modalSub"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">ביטול</button>
+      <button class="btn-confirm" id="modalConfirm">אישור</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const SUPABASE_URL = 'https://ysvwebujdqbfmlczxinw.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzdndlYnVqZHFiZm1sY3p4aW53Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMDU2MjIsImV4cCI6MjA5NDY4MTYyMn0.ugNDnjYxOXLd0U78-9r0GeF1uY50ASa7YBNHc1Q7qyM';
+  const STATIONS = { 1:'יצא לים', 2:'מצוף צפוני', 3:'מצוף דרומי', 4:'חזר מהים' };
+
+  const { createClient } = supabase;
+  const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  var cadets = [];
+  var checkpoints = {};
+  var activeFilter = null;
+  var adminOpen = false;
+  var toastTimer = null;
+
+  async function init() {
+    setLive(false);
+    await loadData();
+    subscribeRealtime();
+  }
+
+  async function loadData() {
+    try {
+      var cr = await db.from('cadets').select('*').order('number');
+      var cpr = await db.from('checkpoint_status').select('*');
+      if (cr.error) throw cr.error;
+      if (cpr.error) throw cpr.error;
+      cadets = cr.data || [];
+      checkpoints = {};
+      (cpr.data || []).forEach(function(cp) {
+        if (!checkpoints[cp.cadet_id]) checkpoints[cp.cadet_id] = {};
+        checkpoints[cp.cadet_id][cp.station] = cp.checked;
+      });
+      render();
+      setLive(true);
+    } catch(e) {
+      console.error('loadData:', e);
+      setLive(false);
+      showToast('שגיאה: ' + e.message, 'error');
+    }
+  }
+
+  function subscribeRealtime() {
+    db.channel('app-rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'checkpoint_status' }, function(payload) {
+        var cp = payload.new;
+        if (cp && cp.cadet_id) {
+          if (!checkpoints[cp.cadet_id]) checkpoints[cp.cadet_id] = {};
+          checkpoints[cp.cadet_id][cp.station] = cp.checked;
+          render();
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cadets' }, function() {
+        loadData();
+      })
+      .subscribe(function(status) {
+        setLive(status === 'SUBSCRIBED');
+      });
+  }
+
+  async function doRefresh() {
+    var btn = document.getElementById('refreshBtn');
+    btn.innerHTML = '<span class="spin">↻</span>';
+    btn.disabled = true;
+    await loadData();
+    btn.innerHTML = '↻';
+    btn.disabled = false;
+    showToast('רועננו ✓', 'success');
+  }
+
+  function render() {
+    renderSummary();
+    renderTable();
+  }
+
+  function renderSummary() {
+    for (var s = 1; s <= 4; s++) {
+      var count = cadets.filter(function(c) { return !checkpoints[c.id] || !checkpoints[c.id][s]; }).length;
+      document.getElementById('s' + s + 'count').textContent = count;
+      document.getElementById('sc' + s).classList.toggle('active', activeFilter === s);
+    }
+  }
+
+  function renderTable() {
+    var list = document.getElementById('cadetList');
+    var filterBar = document.getElementById('filterBar');
+    var rows = cadets;
+
+    if (activeFilter !== null) {
+      rows = cadets.filter(function(c) { return !checkpoints[c.id] || !checkpoints[c.id][activeFilter]; });
+      filterBar.style.display = 'flex';
+      document.getElementById('filterLabel').textContent = 'לא עברו: ' + STATIONS[activeFilter];
+      document.getElementById('filterCount').textContent = rows.length + ' צוערים';
+    } else {
+      filterBar.style.display = 'none';
+    }
+
+    if (cadets.length === 0) {
+      list.innerHTML = '<div class="empty-state"><div class="icon">👥</div><div class="msg">אין צוערים עדיין</div><div class="sub">לחץ על "⚙ ניהול" למעלה<br>כדי להוסיף צוערים</div></div>';
+      return;
+    }
+
+    if (rows.length === 0) {
+      list.innerHTML = '<div class="empty-state"><div class="icon">✅</div><div class="msg">כולם עברו!</div><div class="sub">כל הצוערים עברו תחנה זו</div></div>';
+      return;
+    }
+
+    list.innerHTML = rows.map(function(c) {
+      var cp = checkpoints[c.id] || {};
+      var allDone = cp[1] && cp[2] && cp[3] && cp[4];
+      var boxes = [1,2,3,4].map(function(s) {
+        var on = !!cp[s];
+        return '<div class="check-cell"><button class="checkpoint-btn ' + (on ? 'c'+s : '') + '" id="cp-' + c.id + '-' + s + '" onclick="handleCheckpoint(' + c.id + ',' + s + ',' + on + ')">' + (on ? '✓' : '') + '</button></div>';
+      }).join('');
+      var delBtn = adminOpen ? '<button class="delete-btn" onclick="confirmDelete(' + c.id + ',\'' + esc(c.full_name) + '\')">🗑</button>' : '';
+      return '<div class="cadet-row ' + (allDone ? 'all-done' : '') + '"><div class="cadet-num">' + c.number + '</div><div class="cadet-name">' + delBtn + '<span>' + esc(c.full_name) + '</span></div>' + boxes + '</div>';
+    }).join('');
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function handleCheckpoint(cadetId, station, isChecked) {
+    if (isChecked) {
+      var c = cadets.find(function(x) { return x.id === cadetId; });
+      showModal({
+        icon: '⚠️',
+        title: 'ביטול סימון',
+        sub: 'לבטל סימון של ' + (c ? c.full_name : 'הצוער') + '\nב״' + STATIONS[station] + '״?',
+        confirmText: 'כן, בטל',
+        onConfirm: function() { closeModal(); setCheckpoint(cadetId, station, false); }
+      });
+    } else {
+      setCheckpoint(cadetId, station, true);
+    }
+  }
+
+  async function setCheckpoint(cadetId, station, val) {
+    var btn = document.getElementById('cp-' + cadetId + '-' + station);
+    if (btn) btn.classList.add('loading');
+    try {
+      var res = await db.from('checkpoint_status').update({ checked: val, updated_at: new Date().toISOString() }).eq('cadet_id', cadetId).eq('station', station);
+      if (res.error) throw res.error;
+      if (!checkpoints[cadetId]) checkpoints[cadetId] = {};
+      checkpoints[cadetId][station] = val;
+      render();
+    } catch(e) {
+      console.error(e);
+      showToast('שגיאה בעדכון', 'error');
+      if (btn) btn.classList.remove('loading');
+    }
+  }
+
+  async function addCadet() {
+    var numEl = document.getElementById('newNum');
+    var nameEl = document.getElementById('newName');
+    var num = parseInt(numEl.value);
+    var name = nameEl.value.trim();
+    if (!num || num < 1 || num > 50) { showToast('מספר בין 1 ל-50', 'error'); return; }
+    if (!name) { showToast('נא להזין שם מלא', 'error'); return; }
+    if (cadets.find(function(c) { return c.number === num; })) { showToast('מספר ' + num + ' כבר קיים', 'error'); return; }
+
+    var btn = document.getElementById('addBtn');
+    btn.disabled = true; btn.innerHTML = '<span class="spin" style="font-size:14px">↻</span>';
+    try {
+      var res = await db.from('cadets').insert({ number: num, full_name: name });
+      if (res.error) throw res.error;
+      numEl.value = ''; nameEl.value = '';
+      showToast(name + ' נוסף ✓', 'success');
+      await loadData();
+    } catch(e) {
+      showToast('שגיאה: ' + e.message, 'error');
+    } finally {
+      btn.disabled = false; btn.innerHTML = '+';
+    }
+  }
+
+  function confirmDelete(cadetId, name) {
+    showModal({
+      icon: '🗑',
+      title: 'מחיקת צוער',
+      sub: 'למחוק את ' + name + ' לצמיתות?\nכל נתוני התחנות יימחקו.',
+      confirmText: 'מחק',
+      onConfirm: async function() {
+        closeModal();
+        try {
+          var res = await db.from('cadets').delete().eq('id', cadetId);
+          if (res.error) throw res.error;
+          showToast(name + ' נמחק', 'success');
+          await loadData();
+        } catch(e) { showToast('שגיאה במחיקה', 'error'); }
+      }
+    });
+  }
+
+  function toggleFilter(s) {
+    activeFilter = (activeFilter === s) ? null : s;
+    render();
+  }
+
+  function clearFilter() { activeFilter = null; render(); }
+
+  function toggleAdmin() {
+    adminOpen = !adminOpen;
+    document.getElementById('adminPanel').classList.toggle('open', adminOpen);
+    document.getElementById('adminBtn').classList.toggle('admin-active', adminOpen);
+    render();
+    if (adminOpen) setTimeout(function() { document.getElementById('newNum').focus(); }, 350);
+  }
+
+  function showModal(opts) {
+    document.getElementById('modalIcon').textContent = opts.icon;
+    document.getElementById('modalTitle').textContent = opts.title;
+    document.getElementById('modalSub').textContent = opts.sub;
+    document.getElementById('modalConfirm').textContent = opts.confirmText;
+    document.getElementById('modalConfirm').onclick = opts.onConfirm;
+    document.getElementById('modalOverlay').classList.add('open');
+  }
+
+  function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); }
+
+  function showToast(msg, type) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast ' + (type || '') + ' show';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function() { t.classList.remove('show'); }, 2800);
+  }
+
+  function setLive(on) { document.getElementById('liveDot').classList.toggle('offline', !on); }
+
+  init();
+</script>
+</body>
+</html>
