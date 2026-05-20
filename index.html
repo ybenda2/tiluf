@@ -177,6 +177,11 @@
   .checkpoint-btn.c3 { background: rgba(6,182,212,0.2); border-color: var(--station3); color: var(--station3); }
   .checkpoint-btn.c4 { background: rgba(34,197,94,0.2); border-color: var(--station4); color: var(--station4); }
   .checkpoint-btn.loading { opacity: 0.4; pointer-events: none; }
+  .checkpoint-btn.skipped {
+    border-color: var(--border); background: transparent;
+    color: var(--text-muted); cursor: default; font-size: 17px;
+    pointer-events: none; opacity: 0.5;
+  }
 
   .delete-btn {
     width: 26px; height: 26px; border-radius: 6px;
@@ -502,9 +507,21 @@
     renderTable();
   }
 
+  // A station is skipped if it's unchecked but a later station is checked
+  function isSkipped(cp, station) {
+    if (cp[station]) return false; // already checked, not skipped
+    for (var later = station + 1; later <= 4; later++) {
+      if (cp[later]) return true;
+    }
+    return false;
+  }
+
   function renderSummary() {
     for (var s = 1; s <= 4; s++) {
-      var count = cadets.filter(function(c) { return !checkpoints[c.id] || !checkpoints[c.id][s]; }).length;
+      var count = cadets.filter(function(c) {
+        var cp = checkpoints[c.id] || {};
+        return !cp[s] && !isSkipped(cp, s);
+      }).length;
       document.getElementById('s' + s + 'count').textContent = count;
       document.getElementById('sc' + s).classList.toggle('active', activeFilter === s);
     }
@@ -516,7 +533,10 @@
     var rows = cadets;
 
     if (activeFilter !== null) {
-      rows = cadets.filter(function(c) { return !checkpoints[c.id] || !checkpoints[c.id][activeFilter]; });
+      rows = cadets.filter(function(c) {
+        var cp = checkpoints[c.id] || {};
+        return !cp[activeFilter] && !isSkipped(cp, activeFilter);
+      });
       filterBar.style.display = 'flex';
       document.getElementById('filterLabel').textContent = 'לא עברו: ' + STATIONS[activeFilter];
       document.getElementById('filterCount').textContent = rows.length + ' צוערים';
@@ -539,6 +559,10 @@
       var allDone = cp[1] && cp[2] && cp[3] && cp[4];
       var boxes = [1,2,3,4].map(function(s) {
         var on = !!cp[s];
+        var skipped = !on && isSkipped(cp, s);
+        if (skipped) {
+          return '<div class="check-cell"><button class="checkpoint-btn skipped">—</button></div>';
+        }
         return '<div class="check-cell"><button class="checkpoint-btn ' + (on ? 'c'+s : '') + '" id="cp-' + c.id + '-' + s + '" onclick="handleCheckpoint(' + c.id + ',' + s + ',' + on + ')">' + (on ? '✓' : '') + '</button></div>';
       }).join('');
       var delBtn = adminOpen ? '<button class="delete-btn" onclick="confirmDelete(' + c.id + ',\'' + esc(c.full_name) + '\')">🗑</button>' : '';
